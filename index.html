@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f2f7">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="我的课表">
+<title>我的课表 · 2026 秋</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root{
+    /* 色板＝设计基线 §1.5.2（iOS 系统色）。全页只 4 个彩色：蓝(必修) / 靛(选修) / 橙(调休补课) / 红(今天)，
+       灰阶不计；每个颜色只承担一个语义，不串用。改色先改 设计基线，再改这里。 */
+    --bg:#f2f2f7; --card:#ffffff; --ink:#1c1c1e; --ink2:#6e6e73; --line:#e5e5ea;
+    --must:#007aff; --mustbg:#eaf2ff; --elec:#5856d6; --elecbg:#efeffb;
+    --warn:#c77800; --warnbg:#fff4e0; --off:#8e8e93; --offbg:#f2f2f7;
+    --today:#ff3b30; --todaybg:#ffeceb; --todayline:#ffd6d3; --warnline:#ffdfb0;
+    /* 阴影只用一层且极浅（设计基线 §3）；卡片靠底色分组区分，不靠灰影堆叠 */
+    --shadow:0 1px 2px rgba(0,0,0,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",
+    "Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 18px 40px}
+
+  /* ---------- 顶栏 ---------- */
+  header.bar{
+    position:sticky; top:0; z-index:20; background:rgba(244,246,250,.92);
+    backdrop-filter:saturate(140%) blur(8px); border-bottom:1px solid var(--line);
+  }
+  .bar-in{max-width:1180px;margin:0 auto;padding:12px 18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  .brand{min-width:0}
+  .brand h1{margin:0;font-size:20px;letter-spacing:.3px}
+  .brand p{margin:2px 0 0;font-size:13px;color:var(--ink2);overflow-wrap:anywhere}
+  .nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .nav-row2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  button,select{
+    font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:7px 11px;cursor:pointer;transition:.15s;
+  }
+  button:hover,select:hover{border-color:var(--line);background:var(--bg)}
+  button:active{transform:translateY(1px)}
+  .nav .step{width:38px;text-align:center;font-size:17px;line-height:1;padding:8px 0}
+  .nav select{padding:7px 8px;font-variant-numeric:tabular-nums}
+  .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:8px 13px;background:transparent;font-size:14px}
+  .seg button.on{background:var(--must);color:#fff}
+  .ghost{font-size:14px;color:var(--ink2)}
+
+  /* ---------- 概览条 ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 0}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--ink2);box-shadow:var(--shadow)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip .pl::before{content:'@'}
+  .chip.today{border-color:var(--todayline);background:var(--todaybg);color:var(--today)}
+
+  .banner{margin:14px 0 0;border-radius:var(--radius);padding:11px 14px;font-size:14px;display:none}
+  .banner.show{display:block}
+  .banner.off{background:var(--offbg);color:var(--ink2);border:1px solid var(--line)}
+  .banner.mk{background:var(--warnbg);color:var(--warn);border:1px solid var(--warnline)}
+
+  /* ---------- 单周网格 ---------- */
+  section{margin-top:18px}
+  .grid{display:grid;gap:10px}
+  .grid .corner,.grid .dayhead,.grid .blocklabel,.grid .cell{border-radius:var(--radius)}
+  .dayhead{background:var(--card);border:1px solid var(--line);padding:9px 10px;text-align:center;box-shadow:var(--shadow)}
+  .dayhead .d{font-weight:600;font-size:14px}
+  .dayhead .dt{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .dayhead.today{border-color:var(--todayline);background:var(--todaybg)}
+  .dayhead.today .d{color:var(--today)}
+  .dayhead.off{background:var(--offbg);color:var(--off);box-shadow:none}
+  .dayhead .tag{display:inline-block;margin-top:4px;font-size:12px;padding:1px 7px;border-radius:999px;background:var(--warnbg);color:var(--warn);white-space:nowrap}
+  .dayhead.off .tag{background:var(--offbg);color:var(--ink2)}
+
+  .blocklabel{background:transparent;border:1px dashed var(--line);display:flex;flex-direction:column;justify-content:center;align-items:center;color:var(--ink2);font-size:13px;padding:10px 4px;text-align:center}
+  .blocklabel b{display:block;color:var(--ink);font-size:14px;margin-bottom:3px}
+
+  .cell{background:var(--card);border:1px solid var(--line);min-height:92px;padding:9px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow)}
+  .cell.empty{background:var(--bg);border-style:dashed;box-shadow:none}
+  .cell.off{background:var(--offbg);border-color:var(--line);box-shadow:none;align-items:center;justify-content:center;color:var(--off);font-size:13px}
+
+  .course{border-left:4px solid var(--must);background:var(--mustbg);border-radius:10px;padding:8px 9px}
+  .course.elec{border-left-color:var(--elec);background:var(--elecbg)}
+  .course .nm{font-weight:600;font-size:14px;line-height:1.35}
+  .course .tm{font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums;margin-top:3px}
+  .course .pl{font-size:13px;color:var(--ink);margin-top:1px}
+  .course .nt{font-size:12px;color:var(--ink2);margin-top:5px;border-top:1px dashed rgba(0,0,0,.08);padding-top:4px}
+  /* 节次（如 "1-4节"）绝不允许被拆成两行 —— 列窄时宁可行首下移 */
+  .course .kd{font-size:12px;color:var(--ink2);opacity:.85;white-space:nowrap}
+
+  /* ---------- 整学期视图 ---------- */
+  .allwrap{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;overflow:auto;box-shadow:var(--shadow)}
+  table.all{border-collapse:separate;border-spacing:6px;width:100%;min-width:760px}
+  table.all th{font-size:13px;color:var(--ink2);font-weight:600;padding:2px 4px;text-align:center}
+  table.all td{vertical-align:top;padding:0}
+  .wkbtn{width:100%;text-align:left;font-size:13px;padding:7px 8px;border-radius:10px;white-space:nowrap;background:var(--bg)}
+  .wkbtn.now{background:var(--must);color:#fff;border-color:var(--must)}
+  .wkbtn small{display:block;color:inherit;opacity:.7;font-size:12px;font-variant-numeric:tabular-nums}
+  .mini{border-radius:10px;padding:6px 7px;font-size:12px;background:var(--mustbg);border-left:3px solid var(--must);min-height:34px;line-height:1.4}
+  .mini.elec{background:var(--elecbg);border-left-color:var(--elec)}
+  .mini.off{background:var(--offbg);border-left-color:var(--off);color:var(--off);text-align:center}
+  .mini.mk{background:var(--warnbg);border-left-color:var(--warn);color:var(--warn)}
+  .mini b{font-weight:600}
+  .mini span{display:block;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+  .mini.off span,.mini.mk span{color:inherit;opacity:.8}
+
+  footer{margin-top:22px;font-size:12px;color:var(--ink2);line-height:1.8}
+  footer span{display:block}
+  .f-touch{display:none}
+  footer code{background:var(--offbg);border-radius:6px;padding:1px 6px;font-size:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+  [hidden]{display:none !important}
+
+  /* ---------- 手机版（≤820px）：竖排大字，一屏看一天，不用横着拖 ---------- */
+  .m-only{display:none}
+  @media (max-width:820px){
+    .d-only{display:none !important}
+    .m-only{display:block}
+    .wrap{padding:0 0 calc(28px + env(safe-area-inset-bottom))}
+    header.bar{background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(24px)}
+    .bar-in{padding:10px 16px;gap:10px;align-items:stretch}
+    .brand h1{font-size:22px;letter-spacing:0}
+    .brand p{font-size:13px;line-height:1.4}
+    .nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:8px;width:100%}
+    .nav .step{width:44px;height:44px;padding:0;border-radius:999px;font-size:22px;line-height:42px}
+    .nav select{min-width:0;height:44px;border-radius:999px;padding:0 10px;font-size:16px;font-weight:600;text-align:center}
+    .nav-row2{grid-column:1/-1;display:flex;gap:8px;align-items:center;width:100%}
+    .nav-row2 .ghost{order:2;flex:0 0 auto;height:40px;border:0;border-radius:999px;background:rgba(0,122,255,.12);color:var(--must);font-weight:600}
+    .nav-row2 .seg{order:1;flex:1 1 auto;min-width:0;border-radius:999px;padding:2px;background:var(--offbg)}
+    .seg button{white-space:nowrap}
+    .seg button{flex:1;height:40px;border-radius:999px;font-size:15px;font-weight:600}
+    .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.10)}
+    .chips{display:block;margin:14px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:0 14px}
+    .chip{display:block;border:0;border-radius:0;background:transparent;padding:12px 0;font-size:15px;line-height:1.5;box-shadow:none}
+    .chip + .chip{border-top:.5px solid rgba(60,60,67,.22)}
+    .chip:last-child{display:none}
+    .chip.today{background:transparent;border:0;color:var(--ink)}
+    .chip.today b{color:var(--today)}
+    .chip .pl::before{content:'教室 '}
+    .banner{margin:12px 16px 0;font-size:14px;border-radius:16px;line-height:1.6}
+    .mlist{margin-top:14px}
+    .mday{background:var(--card);border:1px solid var(--line);border-radius:20px;margin:0 16px 12px;padding:14px 14px 6px}
+    .mday.today{border-color:var(--todayline);background:var(--todaybg)}
+    .mday.off{background:var(--offbg);border-color:var(--line)}
+    .mday.none{background:var(--bg);border-style:dashed;padding-bottom:14px}
+    .mh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .mh .md{font-size:20px;font-weight:600}
+    .mday.today .mh .md{color:var(--today)}
+    .mday.off .mh .md{color:var(--off)}
+    .mh .mdate{font-size:15px;color:var(--ink2);font-variant-numeric:tabular-nums}
+    .mh .mtag{margin-left:auto;font-size:13px;padding:3px 10px;border-radius:999px;background:var(--warnbg);color:var(--warn);white-space:nowrap}
+    .mh .mtag.off{background:var(--offbg);color:var(--ink2)}
+    .mh .mtag.today{background:var(--todaybg);color:var(--today)}
+    .msess{display:flex;gap:12px;align-items:flex-start;padding:12px 0}
+    .msess + .msess{border-top:.5px solid rgba(60,60,67,.22)}
+    .msess .mt{flex:none;width:100px;font-variant-numeric:tabular-nums}
+    .msess .mt b{display:block;font-size:16px;font-weight:600}
+    .msess .mt span{display:block;font-size:14px;color:var(--ink2)}
+    .msess .mt i{display:block;font-size:13px;font-style:normal;color:var(--ink2);opacity:.8}
+    .msess .mb{flex:1;min-width:0}
+    .msess .mname{font-size:17px;font-weight:600;line-height:1.4}
+    .msess .mname .pill{display:inline-block;vertical-align:1px;margin-right:6px;font-size:13px;font-weight:400;padding:2px 8px;border-radius:999px;background:var(--mustbg);color:var(--must)}
+    .msess .mname .pill.elec{background:var(--elecbg);color:var(--elec)}
+    .msess .mplace{font-size:15px;color:var(--ink);margin-top:3px}
+    .msess .mplace em{font-style:normal;font-size:13px;color:var(--ink2);margin-right:6px}
+    .msess .mnote{font-size:14px;color:var(--ink2);margin-top:5px;border-top:.5px dashed rgba(0,0,0,.10);padding-top:5px;line-height:1.6}
+    .mempty{font-size:15px;color:var(--off);padding:6px 0 10px}
+    .mtail{margin:2px 16px 0;font-size:14px;color:var(--ink2);line-height:1.7}
+    .mweeks{margin-top:14px}
+    .mw{background:var(--card);border:1px solid var(--line);border-radius:20px;margin:0 16px 12px;padding:12px 14px;cursor:pointer}
+    .mw.now{border-color:var(--must);background:var(--bg)}
+    .mw.none{background:var(--bg);border-style:dashed}
+    .mw.none .mwb{display:none}
+    .mwh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+    .mwh b{font-size:17px;font-weight:600}
+    .mwh span{font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums}
+    .mwh i{font-style:normal;margin-left:auto;font-size:13px;color:var(--ink2)}
+    .mwh i.no{color:var(--off)}
+    .mwb{margin-top:8px}
+    .mwb:empty{display:none}
+    .mwl{display:flex;gap:8px;align-items:baseline;font-size:15px;line-height:1.65;padding:3px 0}
+    .mwl .w1{flex:none;width:44px;color:var(--ink2)}
+    .mwl .w2{flex:none;width:48px;color:var(--ink2);font-variant-numeric:tabular-nums}
+    .mwl .w3{font-weight:600}
+    .mwl .w4{margin-left:auto;font-size:14px;color:var(--ink2);text-align:right}
+    .mwl.elec .w3{color:var(--elec)}
+    .mwl.off{color:var(--off)}
+    .mwl.mk{color:var(--warn)}
+    footer{margin:16px 16px 0;font-size:13px}
+    .f-how,.f-key{display:none}
+    .f-touch{display:block}
+    .legend{margin:10px 16px 0}
+  }
+  @media print{
+    header.bar{position:static;backdrop:none}
+    .nav,.ghost,.seg{display:none !important}
+    body{background:#fff}
+    .cell,.dayhead,.course{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <h1 id="h1">我的课表</h1>
+      <p id="sub"></p>
+    </div>
+    <div class="nav">
+      <button class="step" id="prev" title="上一周（←）">‹</button>
+      <select id="wk" title="选择第几周"></select>
+      <button class="step" id="next" title="下一周（→）">›</button>
+      <div class="nav-row2">
+        <button class="ghost" id="now">回到本周</button>
+        <div class="seg">
+          <button id="tabWeek" class="on">单周</button>
+          <button id="tabAll">整学期</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="chips" id="chips"></div>
+  <div class="banner" id="banner"></div>
+
+  <section id="weekView" class="d-only">
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="weekViewM" class="m-only">
+    <div class="mlist" id="mlist"></div>
+  </section>
+
+  <section id="allView" class="d-only" hidden>
+    <div class="allwrap"><table class="all" id="allTable"></table></div>
+    <div class="legend">
+      <span><i style="background:var(--must)"></i>必修</span>
+      <span><i style="background:var(--elec)"></i>选修</span>
+      <span><i style="background:var(--warn)"></i>调休补课</span>
+      <span><i style="background:var(--off)"></i>放假</span>
+    </div>
+  </section>
+
+  <section id="allViewM" class="m-only" hidden>
+    <div class="mweeks" id="mweeks"></div>
+    <div class="legend">
+      <span><i style="background:var(--must)"></i>必修</span>
+      <span><i style="background:var(--elec)"></i>选修</span>
+      <span><i style="background:var(--warn)"></i>调休补课</span>
+      <span><i style="background:var(--off)"></i>放假</span>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = {"meta":{"title":"我的课表","student":"","className":"","term":"2026 秋季学期","firstMonday":"2026-08-31","weeks":19,"generated":"2026-10-06 21:51","source":"课程表.json + 课表配置.json","holidayLabels":{"2026-10-01":"国庆节（10/01–10/07）放假","2026-10-02":"国庆节（10/01–10/07）放假","2026-09-26":"中秋节（09/25–09/27）放假","2026-10-04":"国庆节（10/01–10/07）放假","2026-09-25":"中秋节（09/25–09/27）放假","2026-10-03":"国庆节（10/01–10/07）放假","2026-09-27":"中秋节（09/25–09/27）放假","2026-10-06":"国庆节（10/01–10/07）放假","2026-10-07":"国庆节（10/01–10/07）放假","2026-10-05":"国庆节（10/01–10/07）放假"}},"blocks":[{"no":1,"label":"上午","from":1,"to":4,"span":"08:00-12:00"},{"no":2,"label":"下午","from":5,"to":8,"span":"14:00-18:00"},{"no":3,"label":"晚上","from":9,"to":11,"span":"19:00-21:50"}],"days":[{"date":"2026-08-31","week":1,"dow":1,"dowName":"周一","srcWeek":1,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-01","week":1,"dow":2,"dowName":"周二","srcWeek":1,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-02","week":1,"dow":3,"dowName":"周三","srcWeek":1,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-03","week":1,"dow":4,"dowName":"周四","srcWeek":1,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-04","week":1,"dow":5,"dowName":"周五","srcWeek":1,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-05","week":1,"dow":6,"dowName":"周六","srcWeek":1,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-06","week":1,"dow":7,"dowName":"周日","srcWeek":1,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-07","week":2,"dow":1,"dowName":"周一","srcWeek":2,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-08","week":2,"dow":2,"dowName":"周二","srcWeek":2,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-09","week":2,"dow":3,"dowName":"周三","srcWeek":2,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-10","week":2,"dow":4,"dowName":"周四","srcWeek":2,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-11","week":2,"dow":5,"dowName":"周五","srcWeek":2,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-12","week":2,"dow":6,"dowName":"周六","srcWeek":2,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-13","week":2,"dow":7,"dowName":"周日","srcWeek":2,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-14","week":3,"dow":1,"dowName":"周一","srcWeek":3,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-15","week":3,"dow":2,"dowName":"周二","srcWeek":3,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-16","week":3,"dow":3,"dowName":"周三","srcWeek":3,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-17","week":3,"dow":4,"dowName":"周四","srcWeek":3,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"}]},{"date":"2026-09-18","week":3,"dow":5,"dowName":"周五","srcWeek":3,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-19","week":3,"dow":6,"dowName":"周六","srcWeek":3,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-20","week":3,"dow":7,"dowName":"周日","srcWeek":6,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":true,"makeupOf":"2026-10-06","makeupTxt":"补 10月06日（周二）的课","sessions":[]},{"date":"2026-09-21","week":4,"dow":1,"dowName":"周一","srcWeek":4,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-22","week":4,"dow":2,"dowName":"周二","srcWeek":4,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-23","week":4,"dow":3,"dowName":"周三","srcWeek":4,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"}]},{"date":"2026-09-24","week":4,"dow":4,"dowName":"周四","srcWeek":4,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"}]},{"date":"2026-09-25","week":4,"dow":5,"dowName":"周五","srcWeek":4,"srcDow":5,"srcDowName":"周五","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-26","week":4,"dow":6,"dowName":"周六","srcWeek":4,"srcDow":6,"srcDowName":"周六","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-27","week":4,"dow":7,"dowName":"周日","srcWeek":4,"srcDow":7,"srcDowName":"周日","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-28","week":5,"dow":1,"dowName":"周一","srcWeek":5,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"}]},{"date":"2026-09-29","week":5,"dow":2,"dowName":"周二","srcWeek":5,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-09-30","week":5,"dow":3,"dowName":"周三","srcWeek":5,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"}]},{"date":"2026-10-01","week":5,"dow":4,"dowName":"周四","srcWeek":5,"srcDow":4,"srcDowName":"周四","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-02","week":5,"dow":5,"dowName":"周五","srcWeek":5,"srcDow":5,"srcDowName":"周五","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-03","week":5,"dow":6,"dowName":"周六","srcWeek":5,"srcDow":6,"srcDowName":"周六","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-04","week":5,"dow":7,"dowName":"周日","srcWeek":5,"srcDow":7,"srcDowName":"周日","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-05","week":6,"dow":1,"dowName":"周一","srcWeek":6,"srcDow":1,"srcDowName":"周一","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-06","week":6,"dow":2,"dowName":"周二","srcWeek":6,"srcDow":2,"srcDowName":"周二","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-07","week":6,"dow":3,"dowName":"周三","srcWeek":6,"srcDow":3,"srcDowName":"周三","holiday":true,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-08","week":6,"dow":4,"dowName":"周四","srcWeek":6,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"}]},{"date":"2026-10-09","week":6,"dow":5,"dowName":"周五","srcWeek":6,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-10","week":6,"dow":6,"dowName":"周六","srcWeek":6,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":true,"makeupOf":"2026-10-07","makeupTxt":"补 10月07日（周三）的课","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"}]},{"date":"2026-10-11","week":6,"dow":7,"dowName":"周日","srcWeek":6,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-12","week":7,"dow":1,"dowName":"周一","srcWeek":7,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"}]},{"date":"2026-10-13","week":7,"dow":2,"dowName":"周二","srcWeek":7,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"饲料学专题","short":"饲料学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-124","placeShort":"1-中-124","start":"08:00","end":"12:00","note":"李振田"}]},{"date":"2026-10-14","week":7,"dow":3,"dowName":"周三","srcWeek":7,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-10-15","week":7,"dow":4,"dowName":"周四","srcWeek":7,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-10-16","week":7,"dow":5,"dowName":"周五","srcWeek":7,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-10-17","week":7,"dow":6,"dowName":"周六","srcWeek":7,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-10-18","week":7,"dow":7,"dowName":"周日","srcWeek":7,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-19","week":8,"dow":1,"dowName":"周一","srcWeek":8,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"},{"name":"自然辩证法","short":"自然辩证法","kind":"","from":5,"to":8,"span":"5-8","place":"大教室-5CD1","placeShort":"5CD1","start":"14:00","end":"18:00","note":"张佳佳"}]},{"date":"2026-10-20","week":8,"dow":2,"dowName":"周二","srcWeek":8,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"饲料学专题","short":"饲料学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-124","placeShort":"1-中-124","start":"08:00","end":"12:00","note":"李振田"}]},{"date":"2026-10-21","week":8,"dow":3,"dowName":"周三","srcWeek":8,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-10-22","week":8,"dow":4,"dowName":"周四","srcWeek":8,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-10-23","week":8,"dow":5,"dowName":"周五","srcWeek":8,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"细胞生物学专题","short":"细胞生物学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼 1-中-113","placeShort":"1-中-113","start":"08:00","end":"12:00","note":"李春丽"},{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-10-24","week":8,"dow":6,"dowName":"周六","srcWeek":8,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-10-25","week":8,"dow":7,"dowName":"周日","srcWeek":8,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-10-26","week":9,"dow":1,"dowName":"周一","srcWeek":9,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"},{"name":"自然辩证法","short":"自然辩证法","kind":"","from":5,"to":8,"span":"5-8","place":"大教室-5CD1","placeShort":"5CD1","start":"14:00","end":"18:00","note":"张佳佳"}]},{"date":"2026-10-27","week":9,"dow":2,"dowName":"周二","srcWeek":9,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"饲料学专题","short":"饲料学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-124","placeShort":"1-中-124","start":"08:00","end":"12:00","note":"李振田"}]},{"date":"2026-10-28","week":9,"dow":3,"dowName":"周三","srcWeek":9,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-10-29","week":9,"dow":4,"dowName":"周四","srcWeek":9,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-10-30","week":9,"dow":5,"dowName":"周五","srcWeek":9,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"细胞生物学专题","short":"细胞生物学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼 1-中-113","placeShort":"1-中-113","start":"08:00","end":"12:00","note":"李春丽"},{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-10-31","week":9,"dow":6,"dowName":"周六","srcWeek":9,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-11-01","week":9,"dow":7,"dowName":"周日","srcWeek":9,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-02","week":10,"dow":1,"dowName":"周一","srcWeek":10,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"},{"name":"自然辩证法","short":"自然辩证法","kind":"","from":5,"to":8,"span":"5-8","place":"大教室-5CD1","placeShort":"5CD1","start":"14:00","end":"18:00","note":"张佳佳"}]},{"date":"2026-11-03","week":10,"dow":2,"dowName":"周二","srcWeek":10,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"饲料学专题","short":"饲料学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-124","placeShort":"1-中-124","start":"08:00","end":"12:00","note":"李振田"}]},{"date":"2026-11-04","week":10,"dow":3,"dowName":"周三","srcWeek":10,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-11-05","week":10,"dow":4,"dowName":"周四","srcWeek":10,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-11-06","week":10,"dow":5,"dowName":"周五","srcWeek":10,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"细胞生物学专题","short":"细胞生物学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼 1-中-113","placeShort":"1-中-113","start":"08:00","end":"12:00","note":"李春丽"},{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-11-07","week":10,"dow":6,"dowName":"周六","srcWeek":10,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-11-08","week":10,"dow":7,"dowName":"周日","srcWeek":10,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-09","week":11,"dow":1,"dowName":"周一","srcWeek":11,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"},{"name":"自然辩证法","short":"自然辩证法","kind":"","from":5,"to":8,"span":"5-8","place":"大教室-5CD1","placeShort":"5CD1","start":"14:00","end":"18:00","note":"张佳佳"}]},{"date":"2026-11-10","week":11,"dow":2,"dowName":"周二","srcWeek":11,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-11","week":11,"dow":3,"dowName":"周三","srcWeek":11,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物营养学专题","short":"动物营养","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"常娟"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-11-12","week":11,"dow":4,"dowName":"周四","srcWeek":11,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"新时代中国特色社会主义理论与实践","short":"中特","kind":"","from":1,"to":4,"span":"1-4","place":"大教室-7DE2","placeShort":"7DE2","start":"08:00","end":"12:00","note":"曹广伟"},{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-11-13","week":11,"dow":5,"dowName":"周五","srcWeek":11,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"细胞生物学专题","short":"细胞生物学","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼 1-中-113","placeShort":"1-中-113","start":"08:00","end":"12:00","note":"李春丽"},{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-11-14","week":11,"dow":6,"dowName":"周六","srcWeek":11,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-11-15","week":11,"dow":7,"dowName":"周日","srcWeek":11,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-16","week":12,"dow":1,"dowName":"周一","srcWeek":12,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"},{"name":"自然辩证法","short":"自然辩证法","kind":"","from":5,"to":8,"span":"5-8","place":"大教室-5CD1","placeShort":"5CD1","start":"14:00","end":"18:00","note":"张佳佳"}]},{"date":"2026-11-17","week":12,"dow":2,"dowName":"周二","srcWeek":12,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-18","week":12,"dow":3,"dowName":"周三","srcWeek":12,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-11-19","week":12,"dow":4,"dowName":"周四","srcWeek":12,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-11-20","week":12,"dow":5,"dowName":"周五","srcWeek":12,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"},{"name":"动物遗传育种专题","short":"遗传育种","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李红"}]},{"date":"2026-11-21","week":12,"dow":6,"dowName":"周六","srcWeek":12,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-11-22","week":12,"dow":7,"dowName":"周日","srcWeek":12,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-23","week":13,"dow":1,"dowName":"周一","srcWeek":13,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物化学和分子生物学进展","short":"生化与分子","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"孙桂荣"}]},{"date":"2026-11-24","week":13,"dow":2,"dowName":"周二","srcWeek":13,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-25","week":13,"dow":3,"dowName":"周三","srcWeek":13,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-11-26","week":13,"dow":4,"dowName":"周四","srcWeek":13,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-11-27","week":13,"dow":5,"dowName":"周五","srcWeek":13,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2026-11-28","week":13,"dow":6,"dowName":"周六","srcWeek":13,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"},{"name":"特种动物资源与利用专题","short":"特种动物","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-119","placeShort":"1-中-119","start":"14:00","end":"18:00","note":"孙桂荣"}]},{"date":"2026-11-29","week":13,"dow":7,"dowName":"周日","srcWeek":13,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-11-30","week":14,"dow":1,"dowName":"周一","srcWeek":14,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"数量遗传学","short":"数量遗传","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"王一宁、乔瑞敏"}]},{"date":"2026-12-01","week":14,"dow":2,"dowName":"周二","srcWeek":14,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-02","week":14,"dow":3,"dowName":"周三","srcWeek":14,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物信息学专题","short":"生物信息","kind":"","from":5,"to":8,"span":"5-8","place":"力行楼1-中-121","placeShort":"1-中-121","start":"14:00","end":"18:00","note":"李转见"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-12-03","week":14,"dow":4,"dowName":"周四","srcWeek":14,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-12-04","week":14,"dow":5,"dowName":"周五","srcWeek":14,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2026-12-05","week":14,"dow":6,"dowName":"周六","srcWeek":14,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"生物统计与试验设计专题","short":"生物统计","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-109","placeShort":"1-中-109","start":"08:00","end":"12:00","note":"李文婷"}]},{"date":"2026-12-06","week":14,"dow":7,"dowName":"周日","srcWeek":14,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-07","week":15,"dow":1,"dowName":"周一","srcWeek":15,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"数量遗传学","short":"数量遗传","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"王一宁、乔瑞敏"}]},{"date":"2026-12-08","week":15,"dow":2,"dowName":"周二","srcWeek":15,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-09","week":15,"dow":3,"dowName":"周三","srcWeek":15,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-12-10","week":15,"dow":4,"dowName":"周四","srcWeek":15,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-12-11","week":15,"dow":5,"dowName":"周五","srcWeek":15,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2026-12-12","week":15,"dow":6,"dowName":"周六","srcWeek":15,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-13","week":15,"dow":7,"dowName":"周日","srcWeek":15,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-14","week":16,"dow":1,"dowName":"周一","srcWeek":16,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"数量遗传学","short":"数量遗传","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"王一宁、乔瑞敏"}]},{"date":"2026-12-15","week":16,"dow":2,"dowName":"周二","srcWeek":16,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-16","week":16,"dow":3,"dowName":"周三","srcWeek":16,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-12-17","week":16,"dow":4,"dowName":"周四","srcWeek":16,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-12-18","week":16,"dow":5,"dowName":"周五","srcWeek":16,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2026-12-19","week":16,"dow":6,"dowName":"周六","srcWeek":16,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-20","week":16,"dow":7,"dowName":"周日","srcWeek":16,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-21","week":17,"dow":1,"dowName":"周一","srcWeek":17,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"数量遗传学","short":"数量遗传","kind":"","from":1,"to":4,"span":"1-4","place":"力行楼1-中-121","placeShort":"1-中-121","start":"08:00","end":"12:00","note":"王一宁、乔瑞敏"}]},{"date":"2026-12-22","week":17,"dow":2,"dowName":"周二","srcWeek":17,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-23","week":17,"dow":3,"dowName":"周三","srcWeek":17,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"},{"name":"生物技术专题","short":"生物技术","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-112","placeShort":"1-中-112","start":"19:00","end":"21:50","note":"王平"}]},{"date":"2026-12-24","week":17,"dow":4,"dowName":"周四","srcWeek":17,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"},{"name":"动物繁殖专题","short":"动物繁殖","kind":"","from":9,"to":11,"span":"9-11","place":"力行楼1-中-121","placeShort":"1-中-121","start":"19:00","end":"21:50","note":"林峰"}]},{"date":"2026-12-25","week":17,"dow":5,"dowName":"周五","srcWeek":17,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2026-12-26","week":17,"dow":6,"dowName":"周六","srcWeek":17,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-27","week":17,"dow":7,"dowName":"周日","srcWeek":17,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-28","week":18,"dow":1,"dowName":"周一","srcWeek":18,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-29","week":18,"dow":2,"dowName":"周二","srcWeek":18,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2026-12-30","week":18,"dow":3,"dowName":"周三","srcWeek":18,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"}]},{"date":"2026-12-31","week":18,"dow":4,"dowName":"周四","srcWeek":18,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"}]},{"date":"2027-01-01","week":18,"dow":5,"dowName":"周五","srcWeek":18,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2027-01-02","week":18,"dow":6,"dowName":"周六","srcWeek":18,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2027-01-03","week":18,"dow":7,"dowName":"周日","srcWeek":18,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2027-01-04","week":19,"dow":1,"dowName":"周一","srcWeek":19,"srcDow":1,"srcDowName":"周一","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2027-01-05","week":19,"dow":2,"dowName":"周二","srcWeek":19,"srcDow":2,"srcDowName":"周二","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2027-01-06","week":19,"dow":3,"dowName":"周三","srcWeek":19,"srcDow":3,"srcDowName":"周三","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"论文写作与学术规范","short":"论文写作","kind":"","from":3,"to":4,"span":"3-4","place":"力行楼1-中-110","placeShort":"1-中-110","start":"10:10","end":"12:00","note":"李国喜 · 只上第 3-4 节 · 学硕+专硕+联院学专硕合上"}]},{"date":"2027-01-07","week":19,"dow":4,"dowName":"周四","srcWeek":19,"srcDow":4,"srcDowName":"周四","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"英语","short":"英语","kind":"","from":5,"to":8,"span":"5-8","place":"1-中-130","placeShort":"1-中-130","start":"14:00","end":"18:00","note":"李若薇、张莉"}]},{"date":"2027-01-08","week":19,"dow":5,"dowName":"周五","srcWeek":19,"srcDow":5,"srcDowName":"周五","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[{"name":"动物安全生产","short":"动物安全生产","kind":"","from":1,"to":4,"span":"1-4","place":"1-中-112","placeShort":"1-中-112","start":"08:00","end":"12:00","note":"付彤"}]},{"date":"2027-01-09","week":19,"dow":6,"dowName":"周六","srcWeek":19,"srcDow":6,"srcDowName":"周六","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]},{"date":"2027-01-10","week":19,"dow":7,"dowName":"周日","srcWeek":19,"srcDow":7,"srcDowName":"周日","holiday":false,"makeup":false,"makeupOf":"","makeupTxt":"","sessions":[]}]};
+
+const DAY_ORDER = [1,2,3,4,5,6,7];
+const DOW_NAMES = {1:'周一',2:'周二',3:'周三',4:'周四',5:'周五',6:'周六',7:'周日',0:'周日'};
+DATA.dowNames = DOW_NAMES;
+const $ = id => document.getElementById(id);
+const byWeek = {};
+for (const d of DATA.days) { (byWeek[d.week] = byWeek[d.week] || []).push(d); }
+for (const k in byWeek) byWeek[k].sort((a,b) => a.dow - b.dow);
+
+const todayStr = new Date().toLocaleDateString('sv-SE');           // yyyy-MM-dd（本地）
+const todayDay = DATA.days.find(d => d.date === todayStr) || null;
+const curWeek  = todayDay ? todayDay.week : (new Date(todayStr) < new Date(DATA.meta.firstMonday) ? 1 : DATA.meta.weeks);
+
+function blockOf(s){ return s.from <= 4 ? 1 : (s.from <= 8 ? 2 : 3); }
+function fmtRange(days){
+  if (!days || !days.length) return '';
+  const a = days[0].date.slice(5), b = days[days.length - 1].date.slice(5);
+  return a.replace('-','/') + ' – ' + b.replace('-','/');
+}
+function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+/* ---------------- 单周视图 ---------------- */
+function renderWeek(w){
+  const days = byWeek[w] || [];
+  const showWeekend = days.some(d => d.dow >= 6 && (d.sessions.length || d.makeup));
+  const cols = DAY_ORDER.filter(d => d <= 5 || (showWeekend && d >= 6));
+  const n = cols.length;
+
+  const grid = $('grid');
+  grid.style.gridTemplateColumns = `84px repeat(${n}, minmax(0,1fr))`;
+  grid.style.setProperty('--n', String(n));
+  let html = '<div class="corner"></div>';
+
+  for (const dow of cols){
+    const d = days.find(x => x.dow === dow) || {dow, date:'', holiday:false, sessions:[]};
+    const isToday = d.date === todayStr;
+    const cls = 'dayhead' + (isToday ? ' today' : '') + (d.holiday ? ' off' : '');
+    const tag = d.makeup ? '<div class="tag">补 ' + esc(d.makeupOf.slice(5).replace('-','/')) + ' 的课</div>'
+              : (d.holiday ? '<div class="tag">放假</div>' : (isToday ? '<div class="tag" style="background:var(--todaybg);color:var(--today)">今天</div>' : ''));
+    html += `<div class="${cls}"><div class="d">${DATA.dowNames[dow]}${isToday?' · 今天':''}</div>
+             <div class="dt">${esc(d.date.slice(5).replace('-','/'))}</div>${tag}</div>`;
+  }
+
+  for (const b of DATA.blocks){
+    html += `<div class="blocklabel"><b>${esc(b.label)}</b>${esc(b.span)}</div>`;
+    for (const dow of cols){
+      const d = days.find(x => x.dow === dow);
+      const list = d ? d.sessions.filter(s => blockOf(s) === b.no) : [];
+      let cls = 'cell';
+      if (d && d.holiday) cls += ' off';
+      else if (!list.length) cls += ' empty';
+      html += `<div class="${cls}">`;
+      if (d && d.holiday) html += '放假';
+      for (const s of list){
+        const kind = (s.kind === '选修') ? ' elec' : '';
+        html += `<div class="course${kind}">
+            <div class="nm">${esc(s.name)}</div>
+            <div class="tm">${esc(s.start)}–${esc(s.end)}　<span class="kd">${esc(s.span)}节</span></div>
+            <div class="pl">${esc(s.place)}</div>
+            ${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}
+          </div>`;
+      }
+      html += '</div>';
+    }
+  }
+  grid.innerHTML = html;
+}
+
+/* ---------------- 概览条 + 提示 ---------------- */
+function renderChrome(w){
+  const days = byWeek[w] || [];
+  const cnt  = days.reduce((a,d) => a + d.sessions.length, 0);
+  const off  = days.filter(d => d.holiday).length;
+  const mk   = days.filter(d => d.makeup);
+
+  $('h1').textContent = DATA.meta.title;
+  const who = [DATA.meta.student, DATA.meta.className, DATA.meta.term].filter(x => x && String(x).trim());
+  $('sub').textContent = `${who.join(' · ')}　|　第 ${w} 周（${fmtRange(days)}）`;
+
+  const chips = [];
+  if (todayDay){
+    const ts = todayDay.sessions.map(s => s.short).join('、');
+    const mkTxt = todayDay.makeup ? `（补 ${esc(todayDay.makeupOf.slice(5).replace('-','/'))} ${esc(todayDay.srcDowName)} 的课）` : '';
+    chips.push(`<div class="chip today">今天 <b>${esc(todayDay.date.slice(5).replace('-','/'))} ${DATA.dowNames[todayDay.dow]}</b> · ${todayDay.holiday ? '放假' : (ts ? esc(ts) : '没课')}${mkTxt}</div>`);
+  }
+  chips.push(`<div class="chip">本周 <b>${cnt}</b> 次课${off ? ' · 放假 ' + off + ' 天' : ''}${mk.length ? ' · 调休补课 ' + mk.length + ' 天' : ''}</div>`);
+  const next = DATA.days.find(d => d.date >= todayStr && d.sessions.length && d.sessions[0].start);
+  if (next){
+    const s = next.sessions[0];
+    chips.push(`<div class="chip">下一节 <b>${esc(next.date.slice(5).replace('-','/'))} ${DATA.dowNames[next.dow]} ${esc(s.start)}</b> ${esc(s.short)}${s.placeShort ? ` <span class="pl">${esc(s.placeShort)}</span>` : ''}${next.makeup ? '（补课）' : ''}</div>`);
+  }
+  chips.push(`<div class="chip">共 <b>${DATA.meta.weeks}</b> 周 ｜ 学期 ${esc(DATA.meta.firstMonday.slice(5).replace('-','/'))} 起</div>`);
+  $('chips').innerHTML = chips.join('');
+
+  let bn = '';
+  const offDays = days.filter(d => d.holiday);
+  if (offDays.length){
+    const range = offDays.map(d => d.date.slice(5).replace('-','/')).join('、');
+    const label = (DATA.meta.holidayLabels || {})[offDays[0].date] || '放假';
+    bn += `<div class="banner off show">${esc(label)}：<b>${range}</b> 停课放假（学校通知口径）。</div>`;
+  }
+  for (const d of mk){
+    bn += `<div class="banner mk show"><b>${esc(d.date.slice(5).replace('-','/'))} ${DATA.dowNames[d.dow]}</b> 调休补课：
+           按 <b>${esc(d.makeupOf.slice(5).replace('-','/'))}（${esc(d.srcDowName)}）</b>那天的课表上课（课表第 ${d.srcWeek} 周的内容）。</div>`;
+  }
+  $('banner').innerHTML = bn;
+}
+
+/* ---------------- 整学期视图 ---------------- */
+function renderAll(){
+  const cols = [1,2,3,4,5,6,7];
+  const showWeekend = DATA.days.some(d => d.dow >= 6 && (d.sessions.length || d.makeup));
+  const use = cols.filter(c => c <= 5 || showWeekend);
+  let h = '<thead><tr><th></th>' + use.map(c => `<th>${DATA.dowNames[c]}</th>`).join('') + '</tr></thead><tbody>';
+  for (let w = 1; w <= DATA.meta.weeks; w++){
+    const days = byWeek[w] || [];
+    h += `<tr><td><button class="wkbtn${w===curWeek?' now':''}" data-w="${w}">第 ${w} 周<small>${fmtRange(days)}</small></button></td>`;
+    for (const c of use){
+      const d = days.find(x => x.dow === c);
+      if (!d){ h += '<td></td>'; continue; }
+      if (d.holiday){ h += '<td><div class="mini off">放假</div></td>'; continue; }
+      if (!d.sessions.length){ h += `<td><div class="mini${d.makeup?' mk':''}" style="background:var(--bg);border-left-color:var(--line);color:var(--off)">${d.makeup?'补':'—'}</div></td>`; continue; }
+      const inner = d.sessions.map(s => `<b>${esc(s.short)}</b><span>${esc(s.start)} ${esc(s.placeShort||'')}</span>`).join('<div style="height:4px"></div>');
+      h += `<td><div class="mini${d.sessions[0].kind==='选修'?' elec':''}${d.makeup?' mk':''}">${inner}</div></td>`;
+    }
+    h += '</tr>';
+  }
+  h += '</tbody>';
+  $('allTable').innerHTML = h;
+  $('allTable').querySelectorAll('button[data-w]').forEach(b => {
+    b.onclick = () => { setWeek(+b.dataset.w); showTab('week'); };
+  });
+}
+
+/* ---------------- 手机版：竖排日视图（不用横着拖） ---------------- */
+function useWeekend(days){ return days.some(d => d.dow >= 6 && (d.sessions.length || d.makeup)); }
+
+function renderWeekMobile(w){
+  const days = byWeek[w] || [];
+  const cols = DAY_ORDER.filter(d => d <= 5 || (useWeekend(days) && d >= 6));
+
+  const shown = cols.filter(dow => {
+    const d = days.find(x => x.dow === dow);
+    return d && (d.sessions.length || d.makeup || d.holiday || d.date === todayStr);
+  });
+  const free = cols.filter(dow => {
+    const d = days.find(x => x.dow === dow);
+    return d && !d.sessions.length && !d.makeup && !d.holiday && d.date !== todayStr;
+  });
+
+  let html = '';
+  for (let i = 0; i < shown.length; i++){
+    const dow = shown[i];
+    const d = days.find(x => x.dow === dow);
+    const isToday = d.date === todayStr;
+
+    // 连着的放假日合并成一张卡（周一 – 周三 放假）。
+    // 不合并的话，国庆这种连休会让手机上连着滚三张"放假，没有课"的空卡。
+    // 放假日正好是"今天"时不合并 —— 那天的"今天"标记比省空间重要。
+    if (d.holiday && !isToday){
+      let j = i;
+      while (j + 1 < shown.length){
+        const nd = days.find(x => x.dow === shown[j + 1]);
+        if (!nd || !nd.holiday || nd.date === todayStr) break;
+        j++;
+      }
+      const last = days.find(x => x.dow === shown[j]);
+      const head = (j > i) ? `${DATA.dowNames[dow]} – ${DATA.dowNames[shown[j]]}` : DATA.dowNames[dow];
+      const rg   = (j > i)
+        ? `${d.date.slice(5).replace('-','/')} – ${last.date.slice(5).replace('-','/')}`
+        : d.date.slice(5).replace('-','/');
+      html += `<div class="mday off"><div class="mh"><span class="md">${head}</span>
+               <span class="mdate">${esc(rg)}</span><span class="mtag off">放假</span></div>
+               <div class="mbody"><div class="mempty">放假，没有课</div></div></div>`;
+      i = j;
+      continue;
+    }
+
+    const cls = 'mday' + (isToday ? ' today' : '') +
+                (d.holiday ? ' off' : ((d.sessions.length || d.makeup) ? '' : ' none'));
+    const tag = d.makeup ? `<span class="mtag">补 ${esc(d.makeupOf.slice(5).replace('-','/'))} 的课</span>`
+              : (d.holiday ? '<span class="mtag off">放假</span>'
+              : (isToday ? '<span class="mtag today">今天</span>' : ''));
+    html += `<div class="${cls}"><div class="mh"><span class="md">${DATA.dowNames[dow]}</span>
+             <span class="mdate">${esc(d.date.slice(5).replace('-','/'))}</span>${tag}</div><div class="mbody">`;
+
+    if (d.holiday){
+      html += '<div class="mempty">放假，没有课</div>';
+    } else {
+      for (const s of d.sessions){
+        const kind = (s.kind === '选修') ? ' elec' : '';
+        // ⚠️ 类别为空时**不能**留一个空的 pill —— 空的 <span class="pill"> 有 padding 与底色，
+        //    会在课程名前面渲染成一小块蓝色色块（实测踩到）。没类别就整块不输出。
+        const pill = s.kind ? `<span class="pill${kind}">${esc(s.kind)}</span>` : '';
+        html += `<div class="msess">
+            <div class="mt"><b>${esc(s.start)}</b><span>${esc(s.end)}</span><i>${esc(s.span)} 节</i></div>
+            <div class="mb">
+              <div class="mname">${pill}${esc(s.name)}</div>
+              <div class="mplace"><em>教室</em>${esc(s.place)}</div>
+              ${s.note ? `<div class="mnote">${esc(s.note)}</div>` : ''}
+            </div></div>`;
+      }
+      if (!d.sessions.length) html += '<div class="mempty">没课</div>';
+    }
+    html += '</div></div>';
+  }
+
+  if (free.length) html += `<div class="mtail">本周没课的：${free.map(x => DATA.dowNames[x]).join('、')}。</div>`;
+  $('mlist').innerHTML = html || '<div class="mtail">这一周还没有课表数据。</div>';
+}
+
+/* ---------------- 手机版：整学期（一周一张卡，点一下跳过去） ---------------- */
+function renderAllMobile(){
+  const use = [1,2,3,4,5].concat(useWeekend(DATA.days) ? [6,7] : []);
+  let h = '';
+  let w = 1;
+  while (w <= DATA.meta.weeks){
+    const days = byWeek[w] || [];
+    const cnt = days.reduce((a,d) => a + d.sessions.length, 0);
+    const mk  = days.filter(d => d.makeup).length;
+    if (!cnt && !mk){
+      // 连着"没课"的周合并成一张卡（第 1 – 2 周 没课），别白占好几张
+      let j = w;
+      while (j + 1 <= DATA.meta.weeks){
+        const nd = byWeek[j + 1] || [];
+        if (nd.reduce((a,d) => a + d.sessions.length, 0) || nd.filter(d => d.makeup).length) break;
+        j++;
+      }
+      const a = (byWeek[w] || [])[0], b = (byWeek[j] || []).slice(-1)[0];
+      const rg = (a && b) ? a.date.slice(5).replace('-','/') + ' – ' + b.date.slice(5).replace('-','/') : '';
+      h += `<div class="mw none" data-w="${w}"><div class="mwh"><b>${j > w ? `第 ${w} – ${j} 周` : `第 ${w} 周`}</b>
+            <span>${rg}</span><i class="no">没课</i></div><div class="mwb"></div></div>`;
+      w = j + 1; continue;
+    }
+    h += `<div class="mw${w === curWeek ? ' now' : ''}" data-w="${w}">
+      <div class="mwh"><b>第 ${w} 周</b><span>${fmtRange(days)}</span>
+      <i class="${cnt ? '' : 'no'}">${cnt ? cnt + ' 次课' : '没课'}${mk ? ' · 补课' : ''}</i></div><div class="mwb">`;
+    let i = 0;
+    while (i < use.length){
+      const c = use[i];
+      const d = days.find(x => x.dow === c);
+      if (!d){ i++; continue; }
+      if (d.holiday){
+        // 连着的放假日合并成一行（周五 – 周日 放假），别一天一张小条把卡片撑高
+        let j = i;
+        while (j < use.length){
+          const dd = days.find(x => x.dow === use[j]);
+          if (!dd || !dd.holiday) break;
+          j++;
+        }
+        const tail = (j - i) > 1 ? ` – ${DATA.dowNames[use[j - 1]]}` : '';
+        h += `<div class="mwl off"><span class="w1">${DATA.dowNames[c]}</span><span class="w2"></span>
+              <span class="w3">${tail} 放假</span></div>`;
+        i = j; continue;
+      }
+      for (const s of d.sessions){
+        h += `<div class="mwl${s.kind === '选修' ? ' elec' : ''}">
+              <span class="w1">${DATA.dowNames[c]}</span><span class="w2">${esc(s.start)}</span>
+              <span class="w3">${esc(s.short || s.name)}</span><span class="w4">${esc(s.placeShort || '')}</span></div>`;
+      }
+      if (!d.sessions.length && d.makeup) h += `<div class="mwl mk"><span class="w1">${DATA.dowNames[c]}</span><span class="w2"></span><span class="w3">调休补课</span></div>`;
+      i++;
+    }
+    h += '</div></div>';
+    w++;
+  }
+  $('mweeks').innerHTML = h;
+  $('mweeks').querySelectorAll('.mw').forEach(el => {
+    el.onclick = () => { setWeek(+el.dataset.w); showTab('week'); };
+  });
+}
+
+/* ---------------- 交互 ---------------- */
+// 支持 课表.html?week=4 直接打开第 4 周（也可以 #w4）
+const qs = new URLSearchParams(location.search).get('week') || (location.hash.match(/^#w(\d+)$/) || [])[1];
+let viewWeek = +(qs || localStorage.getItem('tt.week') || 0) || curWeek;
+function setWeek(w){
+  viewWeek = Math.min(Math.max(w, 1), DATA.meta.weeks);
+  localStorage.setItem('tt.week', viewWeek);
+  $('wk').value = viewWeek;
+  renderWeek(viewWeek); renderChrome(viewWeek); renderWeekMobile(viewWeek);
+  if (window.matchMedia('(max-width:820px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function showTab(which){
+  const isWeek = which === 'week';
+  $('weekView').hidden = !isWeek; $('allView').hidden = isWeek;
+  $('weekViewM').hidden = !isWeek; $('allViewM').hidden = isWeek;
+  $('tabWeek').classList.toggle('on', isWeek); $('tabAll').classList.toggle('on', !isWeek);
+  localStorage.setItem('tt.tab', which);
+  if (!isWeek) { renderAll(); renderAllMobile(); }
+}
+
+(function init(){
+  const sel = $('wk');
+  for (let w = 1; w <= DATA.meta.weeks; w++){
+    const days = byWeek[w] || [];
+    const o = document.createElement('option');
+    o.value = w;
+    o.textContent = `第 ${w} 周（${fmtRange(days)}）` + (days.some(d => d.holiday) ? ' · 假' : '') + (days.some(d => d.makeup) ? ' · 补课' : '');
+    sel.appendChild(o);
+  }
+  sel.onchange = () => setWeek(+sel.value);
+  $('prev').onclick = () => setWeek(viewWeek - 1);
+  $('next').onclick = () => setWeek(viewWeek + 1);
+  $('now').onclick  = () => setWeek(curWeek);
+  $('tabWeek').onclick = () => showTab('week');
+  $('tabAll').onclick  = () => showTab('all');
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  setWeek(viewWeek - 1);
+    if (e.key === 'ArrowRight') setWeek(viewWeek + 1);
+  });
+  DATA.dowNames = DOW_NAMES;
+  setWeek(viewWeek);
+  $('foot').innerHTML =
+    `<span class="f-meta">数据源 <code>${esc(DATA.meta.source)}</code>（排课口径唯一在 <code>课表核心.ps1</code>）　·　生成时间 ${esc(DATA.meta.generated)}</span>
+     <span class="f-how">改课表：编辑 <code>课程表.json</code>（作息、放假、调休改 <code>课表配置.json</code>）后重新生成网页。</span>
+     <span class="f-key">用 ← → 键或下拉框切换周次；放假与调休按学校通知自动标注。</span>
+     <span class="f-touch">切换周次：点上方 ‹ › 或下拉框；点「整学期」里任意一周可直接跳过去。</span>`;
+  showTab(new URLSearchParams(location.search).get('view') === 'all' ? 'all' : (localStorage.getItem('tt.tab') || 'week'));
+})();
+</script>
+</body>
+</html>
